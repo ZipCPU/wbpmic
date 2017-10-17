@@ -47,15 +47,21 @@ int MICNCO::operator()(int sck, int csn) {
 	int	ov;
 	m_phase += m_step;
 	if (csn) {
-		m_ticks = 0;
-		if (!sck) m_bomb = true; // assert(sck == 1);
+		m_ticks = 3;
+		if (!sck) {
+			m_bomb = true; // assert(sck == 1);
+			fprintf(stderr, "MICNCO-BOMB: SCK low while CSn is high\n");
+		}
 		m_state = 0;
 		m_oreg  = 0;
 		ov = 0;
 	} else {
 		m_ticks++;
 		if ((!m_last_sck)&&(sck)) {
-			if (m_ticks < 6) m_bomb = true; // assert(m_ticks > 6);
+			if (m_ticks < 6) {
+				fprintf(stderr, "MICNCO-BOMB: Clock too short\n");
+				m_bomb = true; // assert(m_ticks > 6);
+			}
 			m_ticks = 0;
 			m_state++;
 			if (m_state == 4) {
