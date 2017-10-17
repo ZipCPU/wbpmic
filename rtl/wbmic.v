@@ -19,7 +19,7 @@
 //
 //	1	Sample rate control register
 //	 Bits
-//	  31-28	LOG FIFO size minus two (2^2 ... 2^17)
+//	  31-28	(READ-ONLY) LOG FIFO size minus two (2^2 ... 2^17)
 //	  27-25	Unused
 //	     24	True on FIFO overflow, set to reset the FIFO and overflow
 //		  condition
@@ -60,6 +60,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 //
+`default_nettype	none
+//
 module	wbmic(i_clk, i_rst, i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
 		o_wb_ack, o_wb_stall, o_wb_data,
 		o_csn, o_sck, i_miso,
@@ -68,7 +70,7 @@ module	wbmic(i_clk, i_rst, i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
 	parameter [(TIMING_BITS-1):0]	DEFAULT_RELOAD = 1814;
 	parameter [4:0]	 LGFLEN = 5'h9;
 	parameter [0:0]		VARIABLE_RATE = 1'b1;
-	parameter [8:0]		CKPCK = 2;
+	parameter [8:0]		CKPCK = 3;
 	localparam [4:0] LCLTIMING_BITS
 				= (TIMING_BITS > 19)? 5'd20 : TIMING_BITS;
 	localparam [4:0] LCLLGFLEN = (LGFLEN < 5'h2) ? 5'h2 : LGFLEN;
@@ -147,7 +149,7 @@ module	wbmic(i_clk, i_rst, i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
 	always @(posedge i_clk)
 		pre_ack <= (i_wb_stb)&&(!i_rst);
 	always @(posedge i_clk)
-		o_wb_ack <= (pre_ack)&&(!i_rst);
+		o_wb_ack <= (pre_ack)&&(i_wb_cyc)&&(!i_rst);
 	assign	o_wb_stall = 1'b0;
 
 	smpladc	#(CKPCK)
@@ -173,15 +175,123 @@ module	wbmic(i_clk, i_rst, i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
 
 	initial	adc_req = 1'b0;
 	always @(posedge i_clk)
-		adc_req <= (zclk)||((no_timer)&&(i_wb_stb)&&(i_wb_we));
+		adc_req <= (zclk)||((no_timer)&&(i_wb_stb)&&(i_wb_we)&&(!i_wb_addr));
 
 
 	smplfifo #(.BW(12), .LGFLEN(LCLLGFLEN)) thefifo(i_clk,
 		fifo_reset, w_adc_data[12], w_adc_data[11:0],
 		w_fifo_empty_n,
-		(i_wb_stb)&&(!i_wb_we)&&(!i_wb_addr), w_fifo_data,w_fifo_status,
-		w_fifo_err);
+		(i_wb_stb)&&(!i_wb_we)&&(!i_wb_addr), w_fifo_data,
+		w_fifo_status, w_fifo_err);
+	assign	w_fifo_half_full = w_fifo_status[1];
 
-	wire	o_int = (r_halfint) ? w_fifo_status[1] : w_fifo_empty_n;
+	assign	o_int = (r_halfint) ? w_fifo_half_full : w_fifo_empty_n;
+
+`ifdef FORMAL
+
+`ifdef	WBMIC
+`define	ASSUME	assume
+`else
+`define	ASSUME	assert
+`endif
+	reg	f_past_valid, f_last_clk;
+
+//
+// Assumptions about our inputs
+//
+//
+	initial	restrict(i_rst);
+	initial	restrict(!i_wb_cyc);
+	initial	restrict(!i_wb_stb);
+	always @($global_clock)
+	begin
+		restrict(i_clk == !f_last_clk);
+		f_last_clk <= i_clk;
+		if (!$rose(i_clk))
+		begin
+			// Our bus (and reset) inputs can *only* change on the
+			// positive edge of the clock.  Assert that.
+			`ASSUME($stable(i_rst));
+			`ASSUME($stable(i_wb_cyc));
+			`ASSUME($stable(i_wb_stb));
+			`ASSUME($stable(i_wb_we));
+			`ASSUME($stable(i_wb_addr));
+			`ASSUME($stable(i_wb_data));
+		end
+	end
+
+	// $past(X) only works on the second and subsequent clocks.  Here,
+	// we'll create a f_past_valid signal that we can use to gate
+	// whether or not a $past(X) signal is valid.
+	initial	f_past_valid = 1'b0;
+	always @(posedge i_clk)
+		f_past_valid <= 1'b1;
+
+	//
+	// Bus assertions
+	//
+	// If the strobe is ever asserted, i_wb_cyc *must* also be asserted
+	// at the same time.
+	always @(posedge i_clk)
+		if (i_wb_stb)
+			`ASSUME(i_wb_cyc);
+
+	// Don't allow both the i_rst and i_wb_cyc to be asserted at the
+	// same time.
+	always @(posedge i_clk)
+		`ASSUME((!i_wb_cyc)||(!i_rst));
+
+//
+// Assertions about our outputs
+//
+//
+
+	// The most important output is the o_wb_ack signal.  If this isn't
+	// done properly, this component might hang the bus.  While it's
+	// trivially correct, we'll check it anyway.  Let's make sure this
+	// is properly set, only following a bus request.
+	always @(posedge i_clk)
+		if ((f_past_valid)&&(!$past(i_rst))
+			&&(!$past(i_rst,2))&&($past(f_past_valid))
+			&&($past(i_wb_cyc)))
+			assert(o_wb_ack== (($past(i_wb_stb,2))));
+
+	always @(posedge i_clk)
+		if ((f_past_valid)&&(!$past(i_wb_cyc,2))&&(!$past(i_wb_cyc)))
+			assert(!o_wb_ack);
+
+	//
+	// Assertions regarding the output interrupt
+	//
+	// These should be trivially true.
+	// 
+	always @(*)
+		if (w_fifo_half_full)
+			assert(o_int);
+	always @(*)
+		if ((w_fifo_empty_n)&&(!r_halfint))
+			assert(o_int);
+
+	// Make certain that our zclk timeout value is identical to the
+	// (r_timer_val == 0) condition, just simplified.
+	always @(posedge i_clk)
+		if (zclk)
+			assert(r_timer_val == 0);
+
+	// If we aren't empty, we can only become empty by reading from the
+	// bus.
+	always @(posedge i_clk)
+		if ($past(w_fifo_empty_n))
+			assert((w_fifo_empty_n)
+				||($past(fifo_reset))
+				||($past(i_wb_stb))&&($past(!i_wb_we))
+					&&($past(!i_wb_addr)));
+
+	// If a FIFO error has taken place, then the FIFO error must remain
+	// asserted until a FIFO reset is applied
+	always @(posedge i_clk)
+		if (($past(w_fifo_err))&&(!$past(fifo_reset)))
+			assert(w_fifo_err);
+`endif
 endmodule
 
