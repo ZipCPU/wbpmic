@@ -63,7 +63,7 @@ module	wbsmpladc(i_clk,
 			o_wb_ack, o_wb_stall, o_wb_data,
 		o_csn, o_sck, i_miso,
 		o_int);
-	parameter [8:0]	CKPCK = 2;
+	parameter [8:0]	CKPCK = 3;
 	//
 	parameter [4:0]		TIMING_BITS=5'd20;
 	parameter [(TIMING_BITS-1):0]	DEFAULT_RELOAD = 1814;
@@ -154,5 +154,72 @@ module	wbsmpladc(i_clk,
 
 	assign	o_int = (w_data[12])&&(w_data[13]);
 
+`ifdef	FORMAL
+
+`ifdef	WBSMPLADC
+`define	ASSUME	assume
+`else
+`define	ASSUME	assert
+`endif
+	reg	f_past_valid, f_last_clk;
+
+//
+// Assumptions about our inputs
+//
+//
+	initial	restrict(!i_wb_cyc);
+	initial	restrict(!i_wb_stb);
+	always @($global_clock)
+	begin
+		restrict(i_clk == !f_last_clk);
+		f_last_clk <= i_clk;
+		if (!$rose(i_clk))
+		begin
+			// Our bus (and reset) inputs can *only* change on the
+			// positive edge of the clock.  Assert that.
+			`ASSUME($stable(i_wb_cyc));
+			`ASSUME($stable(i_wb_stb));
+			`ASSUME($stable(i_wb_we));
+			`ASSUME($stable(i_wb_addr));
+			`ASSUME($stable(i_wb_data));
+		end
+	end
+
+	// $past(X) only works on the second and subsequent clocks.  Here,
+	// we'll create a f_past_valid signal that we can use to gate
+	// whether or not a $past(X) signal is valid.
+	initial	f_past_valid = 1'b0;
+	always @(posedge i_clk)
+		f_past_valid <= 1'b1;
+
+	//
+	// Bus assertions
+	//
+	// If the strobe is ever asserted, i_wb_cyc *must* also be asserted
+	// at the same time.
+	always @(posedge i_clk)
+		if (i_wb_stb)
+			`ASSUME(i_wb_cyc);
+
+//
+// Assertions about our outputs
+//
+//
+
+	// The most important output is the o_wb_ack signal.  If this isn't
+	// done properly, this component might hang the bus.  While it's
+	// trivially correct, we'll check it anyway.  Let's make sure this
+	// is properly set, only following a bus request.
+	always @(posedge i_clk)
+		if (f_past_valid)
+			assert(o_wb_ack== $past(i_wb_stb));
+
+	// Make certain that our zclk timeout value is identical to the
+	// (r_timer_val == 0) condition, just simplified.
+	always @(posedge i_clk)
+		if (zclk)
+			assert(r_timer_val == 0);
+
+`endif
 endmodule
 

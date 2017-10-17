@@ -38,7 +38,7 @@
 ################################################################################
 ##
 ##
-TESTS := smpladc smplfifo wbmic
+TESTS := smpladc smplfifo wbmic wbsmpladc
 .PHONY: $(TESTS)
 all: $(TESTS)
 RTL := ../../rtl
@@ -61,6 +61,10 @@ WBMIC    := wbmic
 WBMICBMC := $(WBMIC)_bmc
 WBMICIND := $(WBMIC)_ind
 
+WBSMPL    := wbsmpladc
+WBSMPLBMC := $(WBSMPL)_bmc
+WBSMPLIND := $(WBSMPL)_ind
+
 $(ADC).smt2: $(RTL)/$(ADC).v
 	yosys -ql $(ADC).yslog -s $(ADC).ys
 
@@ -69,6 +73,9 @@ $(FIFO).smt2: $(RTL)/$(FIFO).v
 
 $(WBMIC).smt2: $(RTL)/$(WBMIC).v $(RTL)/smpladc.v $(RTL)/smplfifo.v
 	yosys -ql $(WBMIC).yslog -s $(WBMIC).ys
+
+$(WBSMPL).smt2: $(RTL)/$(WBSMPL).v $(RTL)/smpladc.v $(RTL)/smplfifo.v
+	yosys -ql $(WBSMPL).yslog -s $(WBSMPL).ys
 
 $(ADC) : $(ADC).check
 $(ADC).check: $(ADC).smt2
@@ -88,6 +95,12 @@ $(WBMIC) : $(WBMIC).check
 $(WBMIC).check: $(WBMIC).smt2
 	$(SMTBMC) $(BMCARGS) -t 270 --dump-smt2 $(WBMICBMC).smt2 --dump-vcd $(WBMICBMC).vcd $(WBMIC).smt2
 	$(SMTBMC) $(INDARGS) -t 270 --dump-smt2 $(WBMICIND).smt2 --dump-vcd $(WBMICIND).vcd $(WBMIC).smt2
+	touch $@
+
+$(WBSMPL) : $(WBSMPL).check
+$(WBSMPL).check: $(WBSMPL).smt2
+	$(SMTBMC) $(BMCARGS) -t 270 --dump-smt2 $(WBSMPLBMC).smt2 --dump-vcd $(WBSMPLBMC).vcd $(WBSMPL).smt2
+	$(SMTBMC) $(INDARGS) -t 270 --dump-smt2 $(WBSMPLIND).smt2 --dump-vcd $(WBSMPLIND).vcd $(WBSMPL).smt2
 	touch $@
 
 
