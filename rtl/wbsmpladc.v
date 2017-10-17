@@ -4,18 +4,29 @@
 //
 // Project:	WBPMIC, wishbone control of a MEMs PMod MIC
 //
-// Purpose:	
+// Purpose:	Provides a very simple wishbone controllable interface to the
+//		smpladc.v.  The interface is controleld via a single register.
+//	A separate register can be used to read the data.  The interface
+//	can be used to sample single samples, or to sample continuous
+//	samples depending upon how it is configured.
 //
 // Registers:
 //
 //	0	The data register.  The bottom 16 bits are the most recent
 //		  sample data.
+//
+//		The other two bits in this register are used for controlling
+//		the interface:
+//
 //	  Bits
 //	    17	Device enable
 //	    16	Sample invalid (0 if valid--just like wbuart)
 //
 //	1	The sample rate control register.  The CLKRATE divided by the
 //		  value in this register will be the sample rate of the ADC.
+//
+//		If this register is set to zero, the ADC will sample
+//		once and stop.
 //
 //
 // Creator:	Dan Gisselquist, Ph.D.
