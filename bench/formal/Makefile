@@ -79,27 +79,31 @@ $(WBSMPL).smt2: $(RTL)/$(WBSMPL).v $(RTL)/smpladc.v $(RTL)/smplfifo.v
 
 $(ADC) : $(ADC).check
 $(ADC).check: $(ADC).smt2
-	$(SMTBMC) --presat $(BMCARGS) -t 270 --dump-smt2 $(ADCBMC).smt2 --dump-vcd $(ADCBMC).vcd $(ADC).smt2
+	@rm -f $(ADC).check
+	$(SMTBMC) --presat $(BMCARGS) -t 272 --dump-smt2 $(ADCBMC).smt2 --dump-vcd $(ADCBMC).vcd $(ADC).smt2
 	$(SMTBMC) $(INDARGS) -t 270 --dump-smt2 $(ADCIND).smt2 --dump-vcd $(ADCIND).vcd $(ADC).smt2
 	touch $@
 
 
 $(FIFO) : $(FIFO).check
 $(FIFO).check: $(FIFO).smt2
-	$(SMTBMC) --presat $(BMCARGS) -t 24 --dump-smt2 $(FIFOBMC).smt2 --dump-vcd $(FIFOBMC).vcd $(FIFO).smt2
+	@rm -f $(FIFO).check
+	$(SMTBMC) --presat $(BMCARGS) -t 26 --dump-smt2 $(FIFOBMC).smt2 --dump-vcd $(FIFOBMC).vcd $(FIFO).smt2
 	$(SMTBMC) $(INDARGS) -t 24 --dump-smt2 $(FIFOIND).smt2 --dump-vcd $(FIFOIND).vcd $(FIFO).smt2
 	touch $@
 
 
 $(WBMIC) : $(WBMIC).check
 $(WBMIC).check: $(WBMIC).smt2
-	$(SMTBMC) $(BMCARGS) -t 270 --dump-smt2 $(WBMICBMC).smt2 --dump-vcd $(WBMICBMC).vcd $(WBMIC).smt2
+	@rm -f $(WBMIC).check
+	$(SMTBMC) $(BMCARGS) -t 272 --dump-smt2 $(WBMICBMC).smt2 --dump-vcd $(WBMICBMC).vcd $(WBMIC).smt2
 	$(SMTBMC) $(INDARGS) -t 270 --dump-smt2 $(WBMICIND).smt2 --dump-vcd $(WBMICIND).vcd $(WBMIC).smt2
 	touch $@
 
 $(WBSMPL) : $(WBSMPL).check
 $(WBSMPL).check: $(WBSMPL).smt2
-	$(SMTBMC) $(BMCARGS) -t 270 --dump-smt2 $(WBSMPLBMC).smt2 --dump-vcd $(WBSMPLBMC).vcd $(WBSMPL).smt2
+	@rm -f $(WBSMPL).check
+	$(SMTBMC) $(BMCARGS) -t 272 --dump-smt2 $(WBSMPLBMC).smt2 --dump-vcd $(WBSMPLBMC).vcd $(WBSMPL).smt2
 	$(SMTBMC) $(INDARGS) -t 270 --dump-smt2 $(WBSMPLIND).smt2 --dump-vcd $(WBSMPLIND).vcd $(WBSMPL).smt2
 	touch $@
 

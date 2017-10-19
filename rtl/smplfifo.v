@@ -322,15 +322,30 @@ module smplfifo(i_clk, i_rst, i_wr, i_data,
 		if ($past(i_rst))
 			assert(!o_err);
 		else begin
-			// No underflow detection in this core
+			// Underflow detection
+			if (($past(i_rd))&&($past(r_fill == 0)))
+			begin
+				// This core doesn't report underflow errors,
+				// but quietly ignores them
+				//
+				// assert(o_err);
+				//
+				// On an underflow, we need to be careful not
+				// to advance the pointer.
+				assert(r_last == $past(r_last));
+			end
 			//
-			// if (($past(i_rd))&&($past(r_fill == 0)))
-			//	assert(o_err);
-			//
-			// We do, though, have overflow detection
+			// Overflow detection
 			if (($past(i_wr))&&(!$past(i_rd))
 					&&($past(will_overflow)))
+			begin
+				// Make sure we report this result
 				assert(o_err);
+
+				// Make sure we didn't advance our write
+				// pointer on overflow
+				assert(r_first == $past(r_first));
+			end
 		end
 	end
 
