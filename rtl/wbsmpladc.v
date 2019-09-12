@@ -122,8 +122,9 @@ module	wbsmpladc(i_clk,
 			o_wb_data <= { {(32-TIMING_BITS){1'b0}},
 					r_max_timer[(TIMING_BITS-1):0] };
 		else
-			o_wb_data <= { {(32-18){1'b0}}, w_data[13],
-					!w_data[12], w_data[11:0], 4'h0 };
+			o_wb_data <= { {(32-18){1'b0}}, w_data[ENABLEDBIT],
+					!w_data[VALIDBIT], w_data[11:0], 4'h0 };
+	initial	o_wb_ack = 1'b0;
 	always @(posedge i_clk)
 		o_wb_ack <= i_wb_stb;
 	assign	o_wb_stall = 1'b0;
@@ -135,10 +136,12 @@ module	wbsmpladc(i_clk,
 	initial	no_timer = 1'b1;
 	always @(posedge i_clk)
 		no_timer <= (r_max_timer == 0);
+	localparam	VALIDBIT   = 12;
+	localparam	ENABLEDBIT = 13;
 
 	initial	r_timer_val = 0;
 	always @(posedge i_clk)
-		if ((!r_enabled)&&(!w_data[13]))
+		if ((!r_enabled)&&(!w_data[ENABLEDBIT]))
 			r_timer_val <= 0;
 		else if (r_timer_val == 0)
 			r_timer_val <= (VARIABLE_RATE)?r_max_timer:DEFAULT_RELOAD;
@@ -152,7 +155,12 @@ module	wbsmpladc(i_clk,
 	always @(posedge i_clk)
 		adc_req <= (zclk)||((no_timer)&&(i_wb_stb)&&(i_wb_we));
 
-	assign	o_int = (w_data[12])&&(w_data[13]);
+	assign	o_int = (w_data[ENABLEDBIT])&&(w_data[VALIDBIT]);
+
+	// verilator lint_off UNUSED
+	wire	unused;
+	assign	unused = &{ 1'b0, i_wb_cyc, i_wb_data[31:20] };
+	// verilator lint_on  UNUSED
 
 `ifdef	FORMAL
 
@@ -169,21 +177,25 @@ module	wbsmpladc(i_clk,
 //
 	initial	restrict(!i_wb_cyc);
 	initial	restrict(!i_wb_stb);
-	always @($global_clock)
+	generate if (F_OPT_CLK2FFLOGIC)
 	begin
-		restrict(i_clk == !f_last_clk);
-		f_last_clk <= i_clk;
-		if (!$rose(i_clk))
+		always @($global_clock)
 		begin
-			// Our bus (and reset) inputs can *only* change on the
-			// positive edge of the clock.  Assert that.
-			`ASSUME($stable(i_wb_cyc));
-			`ASSUME($stable(i_wb_stb));
-			`ASSUME($stable(i_wb_we));
-			`ASSUME($stable(i_wb_addr));
-			`ASSUME($stable(i_wb_data));
+			restrict(i_clk == !f_last_clk);
+			f_last_clk <= i_clk;
+			if (!$rose(i_clk))
+			begin
+				// Our bus (and reset) inputs can *only*
+				// change on the positive edge of the clock.
+				// Assert that.
+				`ASSUME($stable(i_wb_cyc));
+				`ASSUME($stable(i_wb_stb));
+				`ASSUME($stable(i_wb_we));
+				`ASSUME($stable(i_wb_addr));
+				`ASSUME($stable(i_wb_data));
+			end
 		end
-	end
+	end endgenerate
 
 	// $past(X) only works on the second and subsequent clocks.  Here,
 	// we'll create a f_past_valid signal that we can use to gate
@@ -197,10 +209,15 @@ module	wbsmpladc(i_clk,
 	//
 	// If the strobe is ever asserted, i_wb_cyc *must* also be asserted
 	// at the same time.
-	always @(posedge i_clk)
-		if (i_wb_stb)
-			`ASSUME(i_wb_cyc);
 
+
+
+	fwb_slave #(.AW(1),.F_MAX_STALL(0),.F_MAX_ACK_DELAY(1),
+			.F_LGDEPTH(2), .F_OPT_MINCLOCK_DELAY(1),
+			.F_OPT_CLK2FFLOGIC(F_OPT_CLK2FFLOGIC(1)))
+		bus(i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data, i_wb_sel,
+			o_wb_ack, o_wb_stall, o_wb_data, 1'b0,
+			f_nreqs, f_nacks, f_outstanding);
 //
 // Assertions about our outputs
 //
@@ -216,9 +233,11 @@ module	wbsmpladc(i_clk,
 
 	// Make certain that our zclk timeout value is identical to the
 	// (r_timer_val == 0) condition, just simplified.
-	always @(posedge i_clk)
+	always @(*)
 		if (zclk)
 			assert(r_timer_val == 0);
+	always @(*)
+		assert(zclk == (r_timer_val == 0));
 
 `endif
 endmodule
