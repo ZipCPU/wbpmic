@@ -1,0 +1,17 @@
+[tasks]
+prf
+
+[options]
+mode prove
+depth 20
+
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal -D SMPLADC smpladc.v
+prep -top smpladc
+
+[files]
+../../rtl/smpladc.v

@@ -1,0 +1,19 @@
+[tasks]
+prf
+
+[options]
+mode prove
+depth 10
+[engines]
+smtbmc boolector
+
+[script]
+read -formal -D WBSMPLADC smpladc.v
+read -formal -D WBSMPLADC wbsmpladc.v
+read -formal -D WBSMPLADC fwb_slave.v
+prep -top wbsmpladc
+
+[files]
+../../rtl/smpladc.v
+../../rtl/wbsmpladc.v
+fwb_slave.v

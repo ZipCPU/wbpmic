@@ -16,7 +16,7 @@
 ##
 ################################################################################
 ##
-## Copyright (C) 2015-2017, Gisselquist Technology, LLC
+## Copyright (C) 2015-2019, Gisselquist Technology, LLC
 ##
 ## This program is free software (firmware): you can redistribute it and/or
 ## modify it under the terms of  the GNU General Public License as published
@@ -44,25 +44,35 @@ YYMMDD=`date +%Y%m%d`
 CXX   := g++
 FBDIR := .
 VDIRFB:= $(FBDIR)/obj_dir
+SUBMAKE := make --no-print-directory -C
+VERILATOR := verilator
+VFLAGS:= -Wall -trace -cc
 
 .PHONY: test
+test: $(VDIRFB)/Vsmpladc__ALL.a
+test: $(VDIRFB)/Vsmplfifo__ALL.a
 test: $(VDIRFB)/Vwbmic__ALL.a
 test: $(VDIRFB)/Vwbsmpladc__ALL.a
 
-$(VDIRFB)/Vwbmic__ALL.a: $(VDIRFB)/Vwbmic.h $(VDIRFB)/Vwbmic.cpp
-$(VDIRFB)/Vwbmic__ALL.a: $(VDIRFB)/Vwbmic.mk
-$(VDIRFB)/Vwbmic.h $(VDIRFB)/Vwbmic.cpp $(VDIRFB)/Vwbmic.mk: wbmic.v smplfifo.v smpladc.v
+$(VDIRFB)/Vsmpladc__ALL.a: $(VDIRFB)/Vsmpladc.cpp
+$(VDIRFB)/Vsmpladc.cpp: smpladc.v
+#
+$(VDIRFB)/Vsmplfifo__ALL.a: $(VDIRFB)/Vsmplfifo.cpp
+$(VDIRFB)/Vsmplfifo.cpp: smplfifo.v
+#
+$(VDIRFB)/Vwbmic__ALL.a: $(VDIRFB)/Vwbmic.cpp
+$(VDIRFB)/Vwbmic.cpp: wbmic.v smplfifo.v smpladc.v
 #
 #
-$(VDIRFB)/Vwbsmpladc__ALL.a: $(VDIRFB)/Vwbsmpladc.h $(VDIRFB)/Vwbsmpladc.cpp
-$(VDIRFB)/Vwbsmpladc__ALL.a: $(VDIRFB)/Vwbsmpladc.mk
-$(VDIRFB)/Vwbsmpladc.h $(VDIRFB)/Vwbsmpladc.cpp $(VDIRFB)/Vwbsmpladc.mk: wbsmpladc.v smpladc.v
+$(VDIRFB)/Vwbsmpladc__ALL.a: $(VDIRFB)/Vwbsmpladc.cpp
+$(VDIRFB)/Vwbsmpladc.cpp: wbsmpladc.v smpladc.v
 
-$(VDIRFB)/V%.cpp $(VDIRFB)/V%.h $(VDIRFB)/V%.mk: $(FBDIR)/%.v
-	verilator -cc -trace $*.v 
+$(VDIRFB)/V%.cpp: $(FBDIR)/%.v
+	$(VERILATOR) $(VFLAGS) $*.v
 
-$(VDIRFB)/V%__ALL.a: $(VDIRFB)/V%.mk
-	cd $(VDIRFB); make -f V$*.mk
+$(VDIRFB)/V%__ALL.a: $(VDIRFB)/V%.cpp
+	$(SUBMAKE) $(VDIRFB) -f V$*.mk
+
 
 .PHONY: clean
 clean:

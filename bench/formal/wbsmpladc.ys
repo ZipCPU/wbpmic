@@ -1,6 +1,0 @@
-read_verilog -D WBSMPLADC -formal ../../rtl/smpladc.v
-read_verilog -D WBSMPLADC -formal ../../rtl/wbsmpladc.v
-prep -top wbsmpladc -nordff
-clk2fflogic
-opt clean
-write_smt2 -wires wbsmpladc.smt2

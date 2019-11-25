@@ -1,5 +1,0 @@
-read_verilog -D SMPLFIFO -formal ../../rtl/smplfifo.v
-prep -top smplfifo -nordff
-clk2fflogic
-opt clean
-write_smt2 -wires smplfifo.smt2

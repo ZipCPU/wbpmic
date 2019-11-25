@@ -1,5 +1,0 @@
-read_verilog -D SMPLADC -formal ../../rtl/smpladc.v
-prep -top smpladc -nordff
-clk2fflogic
-opt clean
-write_smt2 -wires smpladc.smt2

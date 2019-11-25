@@ -1,4 +1,4 @@
-*.smt2
-*.yslog
-*.vcd
-*.check
+smpladc_*/
+smplfifo_*/
+wbmic_*/
+wbsmpladc_*/

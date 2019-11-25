@@ -1,0 +1,23 @@
+[tasks]
+prf
+
+[options]
+mode prove
+depth 12
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal -D WBMIC smpladc.v
+read -formal -D WBMIC smplfifo.v
+read -formal -D WBMIC wbmic.v
+read -formal -D WBMIC fwb_slave.v
+prep -top wbmic
+
+[files]
+../../rtl/smpladc.v
+../../rtl/smplfifo.v
+../../rtl/wbmic.v
+fwb_slave.v
+

@@ -1,7 +1,0 @@
-read_verilog -D WBMIC -formal ../../rtl/smpladc.v
-read_verilog -D WBMIC -formal ../../rtl/smplfifo.v
-read_verilog -D WBMIC -formal ../../rtl/wbmic.v
-prep -top wbmic -nordff
-clk2fflogic
-opt clean
-write_smt2 -wires wbmic.smt2

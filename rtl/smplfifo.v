@@ -11,7 +11,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (C) 2015-2017, Gisselquist Technology, LLC
+// Copyright (C) 2015-2019, Gisselquist Technology, LLC
 //
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
@@ -37,11 +37,11 @@
 //
 `default_nettype	none
 //
-module smplfifo(i_clk, i_rst, i_wr, i_data,
+module smplfifo(i_clk, i_reset, i_wr, i_data,
 		o_empty_n, i_rd, o_data, o_status, o_err);
 	parameter	BW=12;	// Byte/data width
 	parameter [4:0]	LGFLEN=9;	// 512 samples
-	input	wire		i_clk, i_rst;
+	input	wire		i_clk, i_reset;
 	input	wire		i_wr;
 	input	wire [(BW-1):0]	i_data;
 	output	wire		o_empty_n;	// True if something is in FIFO
@@ -64,7 +64,7 @@ module smplfifo(i_clk, i_rst, i_wr, i_data,
 	reg	will_overflow;
 	initial	will_overflow = 1'b0;
 	always @(posedge i_clk)
-		if (i_rst)
+		if (i_reset)
 			will_overflow <= 1'b0;
 		else if (i_rd)
 			will_overflow <= (will_overflow)&&(i_wr);
@@ -78,7 +78,7 @@ module smplfifo(i_clk, i_rst, i_wr, i_data,
 	initial	r_first = 0;
 	initial	r_ovfl  = 0;
 	always @(posedge i_clk)
-		if (i_rst)
+		if (i_reset)
 		begin
 			r_ovfl <= 1'b0;
 			r_first <= { (LGFLEN){1'b0} };
@@ -108,7 +108,7 @@ module smplfifo(i_clk, i_rst, i_wr, i_data,
 	reg	will_underflow;
 	initial	will_underflow = 1'b1;
 	always @(posedge i_clk)
-		if (i_rst)
+		if (i_reset)
 			will_underflow <= 1'b1;
 		else if (i_wr)
 			will_underflow <= 1'b0;
@@ -127,7 +127,7 @@ module smplfifo(i_clk, i_rst, i_wr, i_data,
 	initial	r_last = 0;
 	initial	r_next = { {(LGFLEN-1){1'b0}}, 1'b1 };
 	always @(posedge i_clk)
-		if (i_rst)
+		if (i_reset)
 		begin
 			r_last <= 0;
 			r_next <= { {(LGFLEN-1){1'b0}}, 1'b1 };
@@ -173,7 +173,7 @@ module smplfifo(i_clk, i_rst, i_wr, i_data,
 	reg	r_empty_n;
 	initial	r_empty_n = 1'b0;
 	always @(posedge i_clk)
-		if (i_rst)
+		if (i_reset)
 			r_empty_n <= 1'b0;
 		else casez({i_wr, i_rd, will_underflow})
 			3'b00?: r_empty_n <= (r_first != r_last);
@@ -200,7 +200,7 @@ module smplfifo(i_clk, i_rst, i_wr, i_data,
 			// Although used for receive, this is actually the more
 			// generic answer--should you wish to use the FIFO in
 			// another context.
-			if (i_rst)
+			if (i_reset)
 				r_fill <= 0;
 			else casez({(i_wr), (!will_overflow), (i_rd)&&(!will_underflow)})
 			3'b0?1:   r_fill <= r_first - r_next;
@@ -257,27 +257,12 @@ module smplfifo(i_clk, i_rst, i_wr, i_data,
 //
 	reg	f_past_valid, f_last_clk;
 
-	initial restrict(i_rst);
-
-	always @($global_clock)
-	begin
-		restrict(i_clk == !f_last_clk);
-		f_last_clk <= i_clk;
-		if (!$rose(i_clk))
-		begin
-			`ASSUME($stable(i_rst));
-			`ASSUME($stable(i_wr));
-			`ASSUME($stable(i_data));
-			`ASSUME($stable(i_rd));
-		end
-	end
-
 	//
 	// Underflows are a very real possibility, should the user wish to read from this
 	// FIFO while it is empty.  Our parent module will need to deal with this.
 	//
 	// always @(posedge i_clk)
-	//	`ASSUME((!will_underflow)||(!i_rd)||(i_rst));
+	//	`ASSUME((!will_underflow)||(!i_rd)||(i_reset));
 //
 // Assertions about our outputs
 //
@@ -286,6 +271,10 @@ module smplfifo(i_clk, i_rst, i_wr, i_data,
 	initial	f_past_valid = 1'b0;
 	always @(posedge i_clk)
 		f_past_valid <= 1'b1;
+
+	always @(*)
+	if (!f_past_valid)
+		`ASSUME(i_reset);
 
 	wire	[(LGFLEN-1):0]	f_fill, f_next;
 	assign	f_fill = r_first - r_last;
@@ -313,7 +302,7 @@ module smplfifo(i_clk, i_rst, i_wr, i_data,
 	always @(posedge i_clk)
 	if (f_past_valid)
 	begin
-		if ($past(i_rst))
+		if ($past(i_reset))
 			assert(!o_err);
 		else begin
 			// Underflow detection

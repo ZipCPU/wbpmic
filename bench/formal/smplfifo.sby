@@ -1,0 +1,16 @@
+[tasks]
+prf
+
+[options]
+mode prove
+depth 4
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal -DSMPLFIFO smplfifo.v
+prep -top smplfifo
+
+[files]
+../../rtl//smplfifo.v

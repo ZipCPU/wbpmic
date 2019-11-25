@@ -134,20 +134,20 @@ module	smpladc(i_clk, i_request, i_rd, i_en, o_csn, o_sck, i_miso, o_data);
 
 	initial	r_valid = 1'b0;
 	always @(posedge i_clk)
-		if (i_rd)
-			r_valid <= (valid_stb);
-		else
-			r_valid <= (r_valid)||(valid_stb);
+	if (i_rd)
+		r_valid <= (valid_stb);
+	else
+		r_valid <= (r_valid)||(valid_stb);
 
 	// Grab the value on the rise
 	always @(posedge i_clk)
-		if ((hclk)&&(!zclk))
-			r_data <= { r_data[9:0], i_miso };
+	if ((hclk)&&(!zclk))
+		r_data <= { r_data[9:0], i_miso };
 
 	initial	r_output = 0;
 	always @(posedge i_clk)
-		if ((hclk)&&(o_sck)&&(m_clk >= 5'h10))
-			r_output <= { r_data[10:0], i_miso };
+	if ((hclk)&&(o_sck)&&(m_clk >= 5'h10))
+		r_output <= { r_data[10:0], i_miso };
 
 	assign	o_data = { !last_en, r_valid, r_output };
 
@@ -215,6 +215,32 @@ module	smpladc(i_clk, i_request, i_rd, i_en, o_csn, o_sck, i_miso, o_data);
 
 		if ((f_past_valid)&&(!valid_stb))
 			assert(o_data[11:0] == $past(o_data[11:0]));
+
+		if (((active)||(!o_sck))&&(r_clk > 1))
+		begin
+				if (m_clk >= 5'h2)
+					assert(r_data[0] == f_sreg[0]);
+				if (m_clk >= 5'h3)
+					assert(r_data[1] == f_sreg[1]);
+				if (m_clk >= 5'h4)
+					assert(r_data[2] == f_sreg[2]);
+				if (m_clk >= 5'h5)
+					assert(r_data[3:0] == f_sreg[3:0]);
+				if (m_clk >= 5'h6)
+					assert(r_data[4:0] == f_sreg[4:0]);
+				if (m_clk >= 5'h7)
+					assert(r_data[5:0] == f_sreg[5:0]);
+				if (m_clk >= 5'h8)
+					assert(r_data[6:0] == f_sreg[6:0]);
+				if (m_clk >= 5'h9)
+					assert(r_data[7:0] == f_sreg[7:0]);
+				if (m_clk >= 5'ha)
+					assert(r_data[8:0] == f_sreg[8:0]);
+				if (m_clk >= 5'hb)
+					assert(r_data[9:0] == f_sreg[9:0]);
+				if (m_clk >= 5'hc)
+					assert(r_data[10:0] == f_sreg[10:0]);
+		end
 		if (valid_stb)
 			assert(o_data[11:0] == f_sreg[11:0]);
 

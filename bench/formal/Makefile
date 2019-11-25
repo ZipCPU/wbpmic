@@ -15,7 +15,7 @@
 ##
 ################################################################################
 ##
-## Copyright (C) 2017, Gisselquist Technology, LLC
+## Copyright (C) 2017-2019, Gisselquist Technology, LLC
 ##
 ## This program is free software (firmware): you can redistribute it and/or
 ## modify it under the terms of  the GNU General Public License as published
@@ -44,73 +44,39 @@ all: $(TESTS)
 RTL := ../../rtl
 
 ADC=smpladc
-ADCBMC=$(ADC)_bmc
-ADCIND=$(ADC)_ind
-SMTBMC  := yosys-smtbmc
-# SOLVER  := -s z3
-SOLVER  := -s yices
-# BMCARGS := --presat $(SOLVER)
-BMCARGS := $(SOLVER)
-INDARGS := $(SOLVER) -i
+SMTBMC  := echo
+FIFO	:= smplfifo
+WBMIC	:= wbmic
+WBSMPL	:= wbsmpladc
+WB	:= fwb_slave.v
 
-FIFO    := smplfifo
-FIFOBMC := $(FIFO)_bmc
-FIFOIND := $(FIFO)_ind
-
-WBMIC    := wbmic
-WBMICBMC := $(WBMIC)_bmc
-WBMICIND := $(WBMIC)_ind
-
-WBSMPL    := wbsmpladc
-WBSMPLBMC := $(WBSMPL)_bmc
-WBSMPLIND := $(WBSMPL)_ind
-
-$(ADC).smt2: $(RTL)/$(ADC).v
-	yosys -ql $(ADC).yslog -s $(ADC).ys
-
-$(FIFO).smt2: $(RTL)/$(FIFO).v
-	yosys -ql $(FIFO).yslog -s $(FIFO).ys
-
-$(WBMIC).smt2: $(RTL)/$(WBMIC).v $(RTL)/smpladc.v $(RTL)/smplfifo.v
-	yosys -ql $(WBMIC).yslog -s $(WBMIC).ys
-
-$(WBSMPL).smt2: $(RTL)/$(WBSMPL).v $(RTL)/smpladc.v $(RTL)/smplfifo.v
-	yosys -ql $(WBSMPL).yslog -s $(WBSMPL).ys
-
-$(ADC) : $(ADC).check
-$(ADC).check: $(ADC).smt2
-	@rm -f $(ADC).check
-	$(SMTBMC) --presat $(BMCARGS) -t 272 --dump-smt2 $(ADCBMC).smt2 --dump-vcd $(ADCBMC).vcd $(ADC).smt2
-	$(SMTBMC) $(INDARGS) -t 270 --dump-smt2 $(ADCIND).smt2 --dump-vcd $(ADCIND).vcd $(ADC).smt2
-	touch $@
+.PHONY: $(ADC)
+$(ADC) : $(ADC)_prf/PASS
+$(ADC)_prf/PASS: $(ADC).sby $(RTL)/$(ADC).v
+	sby -f $(ADC).sby prf
 
 
-$(FIFO) : $(FIFO).check
-$(FIFO).check: $(FIFO).smt2
-	@rm -f $(FIFO).check
-	$(SMTBMC) --presat $(BMCARGS) -t 26 --dump-smt2 $(FIFOBMC).smt2 --dump-vcd $(FIFOBMC).vcd $(FIFO).smt2
-	$(SMTBMC) $(INDARGS) -t 24 --dump-smt2 $(FIFOIND).smt2 --dump-vcd $(FIFOIND).vcd $(FIFO).smt2
-	touch $@
+.PHONY: $(FIFO)
+$(FIFO) : $(FIFO)_prf/PASS
+$(FIFO)_prf/PASS: $(FIFO).sby $(RTL)/$(FIFO).v
+	sby -f $(FIFO).sby prf
 
 
-$(WBMIC) : $(WBMIC).check
-$(WBMIC).check: $(WBMIC).smt2
-	@rm -f $(WBMIC).check
-	$(SMTBMC) $(BMCARGS) -t 272 --dump-smt2 $(WBMICBMC).smt2 --dump-vcd $(WBMICBMC).vcd $(WBMIC).smt2
-	$(SMTBMC) $(INDARGS) -t 270 --dump-smt2 $(WBMICIND).smt2 --dump-vcd $(WBMICIND).vcd $(WBMIC).smt2
-	touch $@
+.PHONY: $(WBMIC)
+$(WBMIC) : $(WBMIC)_prf/PASS
+$(WBMIC)_prf/PASS: $(WBMIC).sby $(RTL)/$(WBMIC).v $(RTL)/$(FIFO).v $(RTL)/$(ADC).v
+	sby -f $(WBMIC).sby
 
-$(WBSMPL) : $(WBSMPL).check
-$(WBSMPL).check: $(WBSMPL).smt2
-	@rm -f $(WBSMPL).check
-	$(SMTBMC) $(BMCARGS) -t 272 --dump-smt2 $(WBSMPLBMC).smt2 --dump-vcd $(WBSMPLBMC).vcd $(WBSMPL).smt2
-	$(SMTBMC) $(INDARGS) -t 270 --dump-smt2 $(WBSMPLIND).smt2 --dump-vcd $(WBSMPLIND).vcd $(WBSMPL).smt2
-	touch $@
+.PHONY: $(WBSMPL)
+$(WBSMPL) : $(WBSMPL)_prf/PASS
+$(WBSMPL)_prf/PASS: $(WBSMPL).sby $(RTL)/$(WBSMPL).v $(RTL)/$(ADC).v $(WB)
+	sby -f $(WBSMPL).sby
 
 
 .PHONY: clean
 clean:
-	rm -f   $(ADC).smt2   $(ADCBMC).smt2   $(ADCIND).smt2   $(ADC)*.vcd
-	rm -f  $(FIFO).smt2  $(FIFOBMC).smt2  $(FIFOIND).smt2  $(FIFO)*.vcd
-	rm -f $(WBMIC).smt2 $(WBMICBMC).smt2 $(WBMICIND).smt2 $(WBMIC)*.vcd
+	rm -rf $(ADC)_*/
+	rm -rf $(FIFO)_*/
+	rm -rf $(WBMIC)_*/
+	rm -rf $(WBSMPL)_*/
 	rm -f *.check

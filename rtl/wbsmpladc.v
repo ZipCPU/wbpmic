@@ -34,7 +34,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (C) 2017, Gisselquist Technology, LLC
+// Copyright (C) 2017-2019, Gisselquist Technology, LLC
 //
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
@@ -59,8 +59,8 @@
 //
 //
 module	wbsmpladc(i_clk,
-		i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
-			o_wb_ack, o_wb_stall, o_wb_data,
+		i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data, i_wb_sel,
+			o_wb_stall, o_wb_ack, o_wb_data,
 		o_csn, o_sck, i_miso,
 		o_int);
 	parameter [8:0]	CKPCK = 3;
@@ -73,9 +73,10 @@ module	wbsmpladc(i_clk,
 	//
 	input	wire		i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr;
 	input	wire	[31:0]	i_wb_data;
+	input	wire	[3:0]	i_wb_sel;
 	//
-	output	reg		o_wb_ack;
 	output	wire		o_wb_stall;
+	output	reg		o_wb_ack;
 	output	reg	[31:0]	o_wb_data;
 	// 
 	output	wire		o_csn, o_sck;
@@ -96,8 +97,8 @@ module	wbsmpladc(i_clk,
 	// If the timer is set to zero, though, this will initiate a conversion
 	initial	r_enabled = 1'b0;
 	always @(posedge i_clk)
-		if ((i_wb_stb)&&(i_wb_we)&&(!w_addr))
-			r_enabled <= !i_wb_data[17];
+	if ((i_wb_stb)&&(i_wb_we)&&(!w_addr))
+		r_enabled <= !i_wb_data[17];
 
 	//
 	// Address one: maximum timer value, sets the sample conversion rate.
@@ -105,8 +106,8 @@ module	wbsmpladc(i_clk,
 	// Conversion rate should be CLKFREQHZ / (r_max_timer+1)
 	initial	r_max_timer = DEFAULT_RELOAD;
 	always @(posedge i_clk)
-		if ((i_wb_stb)&&(i_wb_we)&&(w_addr))
-			r_max_timer <= i_wb_data[(TIMING_BITS-1):0];
+	if ((i_wb_stb)&&(i_wb_we)&&(w_addr))
+		r_max_timer <= i_wb_data[(TIMING_BITS-1):0];
 
 	//
 	// Read requests.  These will invalidate the valid line, and therefore
@@ -118,12 +119,12 @@ module	wbsmpladc(i_clk,
 
 
 	always @(posedge i_clk)
-		if (w_addr)
-			o_wb_data <= { {(32-TIMING_BITS){1'b0}},
-					r_max_timer[(TIMING_BITS-1):0] };
-		else
-			o_wb_data <= { {(32-18){1'b0}}, w_data[ENABLEDBIT],
-					!w_data[VALIDBIT], w_data[11:0], 4'h0 };
+	if (w_addr)
+		o_wb_data <= { {(32-TIMING_BITS){1'b0}},
+				r_max_timer[(TIMING_BITS-1):0] };
+	else
+		o_wb_data <= { {(32-18){1'b0}}, w_data[ENABLEDBIT],
+				!w_data[VALIDBIT], w_data[11:0], 4'h0 };
 	initial	o_wb_ack = 1'b0;
 	always @(posedge i_clk)
 		o_wb_ack <= i_wb_stb;
@@ -141,15 +142,24 @@ module	wbsmpladc(i_clk,
 
 	initial	r_timer_val = 0;
 	always @(posedge i_clk)
-		if ((!r_enabled)&&(!w_data[ENABLEDBIT]))
-			r_timer_val <= 0;
-		else if (r_timer_val == 0)
-			r_timer_val <= (VARIABLE_RATE)?r_max_timer:DEFAULT_RELOAD;
-		else
-			r_timer_val <= r_timer_val - 1'b1;
+	if ((!r_enabled)&&(!w_data[ENABLEDBIT]))
+		r_timer_val <= 0;
+	else if (zclk)
+		r_timer_val <= (VARIABLE_RATE)?r_max_timer:DEFAULT_RELOAD;
+	else
+		r_timer_val <= r_timer_val - 1'b1;
 
-	initial	zclk = 1'b0;
+	initial	zclk = 1'b1;
 	always @(posedge i_clk)
+	if ((!r_enabled)&&(!w_data[ENABLEDBIT]))
+		zclk <= 1;
+	else if (zclk)
+	begin
+		if (!VARIABLE_RATE)
+			zclk <= (DEFAULT_RELOAD == 0);
+		else
+			zclk <= ((r_max_timer==0) ? 1:0);
+	end else
 		zclk <= (r_timer_val == { {(TIMING_BITS-1){1'b0}}, 1'b1 });
 
 	always @(posedge i_clk)
@@ -159,7 +169,7 @@ module	wbsmpladc(i_clk,
 
 	// verilator lint_off UNUSED
 	wire	unused;
-	assign	unused = &{ 1'b0, i_wb_cyc, i_wb_data[31:20] };
+	assign	unused = &{ 1'b0, i_wb_cyc, i_wb_data[31:20], i_wb_sel };
 	// verilator lint_on  UNUSED
 
 `ifdef	FORMAL
@@ -169,33 +179,14 @@ module	wbsmpladc(i_clk,
 `else
 `define	ASSUME	assert
 `endif
-	reg	f_past_valid, f_last_clk;
+	localparam	F_LGDEPTH=2;
+	reg			f_past_valid, f_last_clk;
+	reg	[F_LGDEPTH-1:0]	f_nreqs, f_nacks;
 
 //
 // Assumptions about our inputs
 //
 //
-	initial	restrict(!i_wb_cyc);
-	initial	restrict(!i_wb_stb);
-	generate if (F_OPT_CLK2FFLOGIC)
-	begin
-		always @($global_clock)
-		begin
-			restrict(i_clk == !f_last_clk);
-			f_last_clk <= i_clk;
-			if (!$rose(i_clk))
-			begin
-				// Our bus (and reset) inputs can *only*
-				// change on the positive edge of the clock.
-				// Assert that.
-				`ASSUME($stable(i_wb_cyc));
-				`ASSUME($stable(i_wb_stb));
-				`ASSUME($stable(i_wb_we));
-				`ASSUME($stable(i_wb_addr));
-				`ASSUME($stable(i_wb_data));
-			end
-		end
-	end endgenerate
 
 	// $past(X) only works on the second and subsequent clocks.  Here,
 	// we'll create a f_past_valid signal that we can use to gate
@@ -213,11 +204,15 @@ module	wbsmpladc(i_clk,
 
 
 	fwb_slave #(.AW(1),.F_MAX_STALL(0),.F_MAX_ACK_DELAY(1),
-			.F_LGDEPTH(2), .F_OPT_MINCLOCK_DELAY(1),
-			.F_OPT_CLK2FFLOGIC(F_OPT_CLK2FFLOGIC(1)))
-		bus(i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data, i_wb_sel,
+			.F_LGDEPTH(F_LGDEPTH), .F_OPT_MINCLOCK_DELAY(1))
+		bus(i_clk, !f_past_valid,
+			i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data, i_wb_sel,
 			o_wb_ack, o_wb_stall, o_wb_data, 1'b0,
 			f_nreqs, f_nacks, f_outstanding);
+
+	always @(*)
+		assert(f_outstanding == ((o_wb_ack && i_wb_cyc) ? 1:0));
+
 //
 // Assertions about our outputs
 //
@@ -228,14 +223,15 @@ module	wbsmpladc(i_clk,
 	// trivially correct, we'll check it anyway.  Let's make sure this
 	// is properly set, only following a bus request.
 	always @(posedge i_clk)
-		if (f_past_valid)
-			assert(o_wb_ack== $past(i_wb_stb));
+	if (f_past_valid)
+		assert(o_wb_ack== $past(i_wb_stb));
 
 	// Make certain that our zclk timeout value is identical to the
 	// (r_timer_val == 0) condition, just simplified.
 	always @(*)
-		if (zclk)
-			assert(r_timer_val == 0);
+	if (zclk)
+		assert(r_timer_val == 0);
+
 	always @(*)
 		assert(zclk == (r_timer_val == 0));
 
